@@ -44,17 +44,33 @@ separate identity module would fight few-step distillation.
 
 ## Results
 
-All comparisons are `[ real / input  |  generated ]`.
+Comparisons are `[ real / input  |  generated ]`.
 
-| Test | What it shows |
-|------|---------------|
-| Training frame, strength 0.6 | Renders the trained street; structure locked, textures plausible |
-| **Unseen photo, strength 1.0** | Canvas is *pure noise* — the coherent street that comes out is regenerated from depth+normals **alone**. Proof it's true regeneration, not pass-through. |
-| CGI tea-stall / city render | Takes **rendered** (non-photographic) input and pushes it toward real street texture — the engine path works |
+### Conditioning signals (what the model is steered by)
 
-> `results/` holds the comparison grids. The strength-1.0 OOD image is the key one:
-> with the texture fully destroyed, structure survives, so the geometry conditioning is
-> genuinely load-bearing.
+| depth (near = bright) | normals (view-space) |
+|:---:|:---:|
+| ![depth](results/depth_example.png) | ![normals](results/normals_example.png) |
+
+### Generated output
+
+**Training frame, strength 0.3** — output hugs the render; structure locked, textures plausible:
+
+![training strength 0.3](results/training_strength03.png)
+
+**Unseen photo, strength 1.0** — the canvas is *pure noise*, so the coherent street that
+comes out is regenerated from depth + normals **alone**. This is the key result: with the
+input texture fully destroyed, structure survives — proof the geometry conditioning is
+genuinely load-bearing, not pass-through.
+
+![OOD strength 1.0 proof](results/ood_strength10_proof.png)
+
+**CGI / game render → real** — takes rendered (non-photographic) input and pushes it
+toward real street texture. The engine path works:
+
+![CGI tea stall](results/cgi_teastall.png)
+
+![CGI city](results/cgi_city.png)
 
 ---
 
@@ -62,14 +78,14 @@ All comparisons are `[ real / input  |  generated ]`.
 
 ```
 extract_street.py   video → 12fps/384px windows → DA3 metric depth + DSINE normals + SD-1.5 latents
-train_street.py     temporal U-Net, noised-texture canvas + clean depth/normals + past frame → clean frame
+train_street.py     temporal U-Net: noised-texture canvas + clean depth/normals + past frame → clean frame
 sample_street.py    generate [real|generated] grids from a checkpoint, any strength
 test_image.py       run the model on ANY image (OOD / CGI test) using training conventions
 ```
 
 **Conventions** (recorded in `conventions.json`, must be matched by a 3D engine at
 inference): 384px, 12fps, 16-frame windows; depth = DepthAnything-3 metric, per-window
-2–98th percentile stretch, near=bright; normals = DSINE, view-space, `rgb = n*0.5+0.5`;
+2–98th percentile stretch, near = bright; normals = DSINE, view-space, `rgb = n*0.5+0.5`;
 VAE = SD-1.5 (`×0.18215`).
 
 ---
@@ -77,10 +93,8 @@ VAE = SD-1.5 (`×0.18215`).
 ## Reproduce
 
 ```bash
-# weights + data + frames live on Hugging Face (see links)
 pip install torch torchvision diffusers transformers geffnet huggingface_hub
-git clone https://github.com/<ByteDance-Seed/Depth-Anything-3>   # depth
-# DSINE pulls via torch.hub automatically
+# DA3 (depth) clones from its repo; DSINE pulls via torch.hub automatically
 
 # extract conditions from your own footage
 python extract_street.py --setup --video your_walk.webm
@@ -111,9 +125,9 @@ python test_image.py --img some_street.jpg --strength 0.5
   prior** (e.g. fine-tuning Wan-class models with this same conditioning), not more
   from-scratch data.
 - **Realtime is a solved recipe for small models** (few-step distillation + compile +
-  tiny VAE decoder + self-forcing), demonstrated earlier on a face prototype at ~30fps
-  on a 3090. Porting it to a larger pretrained prior is a different (heavier)
-  toolchain.
+  tiny VAE decoder + self-forcing), demonstrated earlier on a face prototype at ~30 fps
+  on a single RTX 3090. Porting it to a larger pretrained prior is a different
+  (heavier) toolchain.
 
 ---
 
